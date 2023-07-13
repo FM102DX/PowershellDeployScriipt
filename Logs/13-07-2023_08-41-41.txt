@@ -1,0 +1,2 @@
+[13.07.2023-08:41:41] deployAddress01=root@31.31.201.152:22
+[13.07.2023-08:41:41] Script started with params: transactionId=, customWokingFolder=, callType=plain
