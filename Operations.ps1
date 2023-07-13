@@ -45,6 +45,7 @@ $deployCreds1 = New-Object System.Management.Automation.PSCredential ($userName1
     # file to store creds in
 [string] $credsFilePath = "C:\Develop\Deploy\Creds\Creds.txt";
 [string] $deployAddress01='';
+[string] $deployHost01='';
 
 $menuContent = Get-content $menuFileFullPath
 
@@ -90,12 +91,15 @@ function SetupCredentials()
     if (-not $credFileExists) {return;}
 
     $fileData =  [System.IO.File]::ReadAllText($credsFilePath);
-
+    log "fileData=$($fileData)"
     $arr=$fileData.Split("`n");
+
+    log "arr.Length=$($arr.Length)"
 
     if($arr.Length -gt 0)
     {
-        $deployAddress01 = GetValueFromArray -arr $arr -key 'DeployAddress01' | Select-Object  -Last 1
+        $script:deployAddress01 = GetValueFromArray -arr $arr -key 'DeployAddress01' | Select-Object  -Last 1
+        $script:deployHost01 = GetValueFromArray -arr $arr -key 'DeployHost01' | Select-Object  -Last 1
     }
 
     Log "deployAddress01=$deployAddress01"
@@ -191,20 +195,21 @@ function Test01([string] $_transactionId)
 {
     if($callType -eq 'plain')
     {
+        # this is made to start transaction in a separate window
         [string] $argList = "-file $scriptFileFullPath -transactionId $_transactionId -callType 'external-from-self' ";
         Start-process -FilePath $pwshPath -ArgumentList $argList -PassThru;
-
-        log "performing ps command:"
-        log "Start-process -FilePath 'powershell.exe' -ArgumentList $argList -PassThru"
-
         return;
     }
 
+    #variables 
+    [string] $remoteFolder = "/var/www/www-root/data/www/storeapi01.t109.tech";
+    [string] $projectPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi";
+    [string] $projectBuildPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi\bin\Debug\net6.0\*";
 
     # session
-    $deploySession = New-PSSession -HostName $deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";   
-
-    # stop service
+    $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";   
+    
+    # stop service and check if stopped
     Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl stop api01.service" }
 
     if ($isActive -eq 'active') { throw; }
@@ -214,11 +219,10 @@ function Test01([string] $_transactionId)
     $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active api01.service"; }
     
     # delete folder
-    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo rm -r -f  /var/www/www-root/data/www/storeapi01.t109.tech";}
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo rm -r -f  $($args[0])";} -ArgumentList $remoteFolder
     
     # check if folder deleted
-
-    [string] $folderExists = Invoke-Command -Session $deploySession -ScriptBlock    { test-path "/var/www/www-root/data/www/storeapi01.t109.tech"}
+    [string] $folderExists = Invoke-Command -Session $deploySession -ScriptBlock    { test-path $args[0]}  -ArgumentList $remoteFolder
 
     "folderExists=$folderExists"
 
@@ -227,46 +231,79 @@ function Test01([string] $_transactionId)
     # --- deploy
     #  -- build 
 
-    [string] $projectPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi";
+
 
     # Start-process -FilePath 'cmd.exe' -ArgumentList "dotnet build $projectPath"
 
     "dotnet build $projectPath" | cmd
 
-    [string] $projectPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi\bin\Debug\net6.0\";
-
-    # copy it all to host
+    # create dir and copy it all to host
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "mkdir $($args[0])";} -ArgumentList $remoteFolder
+    
+    Copy-Item $projectBuildPath -ToSession $deploySession -Destination "/var/www/www-root/data/www/storeapi01.t109.tech" -Recurse -Force ;
 
     # give rights to folder
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "chmod 777 $($args[0])";} -ArgumentList $remoteFolder
 
-    # start service
+    # start service and check if started
     Invoke-Command -Session $deploySession -ScriptBlock  {  Invoke-Expression "sudo systemctl start api01.service"; }
     PerformSecondsCountDown -seconds 3;
     $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active api01.service"; }
     if ($isActive -ne 'active')   {   throw;  }
-
-
 }
 
-function Test02([string] $_transactionId)
+function DeployHtmlAboutmeSite([string] $_transactionId)
 {
     if($callType -eq 'plain')
     {
+        # this is made to start transaction in a separate window
         [string] $argList = "-file $scriptFileFullPath -transactionId $_transactionId -callType 'external-from-self' ";
+        log "starting new process with args: $argList"
         Start-process -FilePath $pwshPath -ArgumentList $argList -PassThru;
-
-        log "performing ps command:"
-        log "Start-process -FilePath 'powershell.exe' -ArgumentList $argList -PassThru"
-
         return;
     }
 
-    write-host "this is 100102";
     
-    # PerformSecondsCountDown -seconds 15 -performLog $false;  
+    $script:deployAddress01
 
 
+    # session
+    $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";   
+    
+
+    # delete folder
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo rm -r -f  /var/www/www-root/data/www/aboutme.t109.tech";}
+    
+
+    # check if folder deleted
+    [string] $folderExists = Invoke-Command -Session $deploySession -ScriptBlock  { test-path "/var/www/www-root/data/www/aboutme.t109.tech"}
+    if ($folderExists -ne 'false')   {   throw;  }
+    
+    Copy-Item "C:\Develop\SiteData\aboutme.t109.tech" -ToSession $deploySession -Destination "/var/www/www-root/data/www/" -Recurse -Force ;
+
+
+    # copy files
+    # robocopy "C:\Develop\SiteData\aboutme.t109.tech" "//$($script:deployHost01)/var/www/www-root/data/www/" /mir /xd;
+
+    
+    # CopyFilesToRemoteHostViaRoboCopy -folderSrc "C:\Develop\SiteData\aboutme.t109.tech" -hostTarget "$($script:deployHost01)" -folderTarget "/var/www/www-root/data/www/";
+    # PerformSecondsCountDown -seconds 10
 }
+
+function CopyFilesToRemoteHostViaRoboCopy([string] $folderSrc, [string] $hostTarget, [string] $folderTarget )
+{
+    [string] $srcPath = $folderSrc.Replace(":", "$");
+    [string] $targetPath = "\\$($hostTarget)\$($folderTarget)".Replace(":", "$");
+    
+    $netTarget = new-object -ComObject WScript.Network;
+    $netTarget.RemoveNetworkDrive('j:', $true);
+    $netTarget.MapNetworkDrive('j:', "$targetPath", $false);
+
+    log "Performing data robocopy from srcPath=$srcPath targetPath=$targetPath"
+
+    # robocopy C:\Develop\SiteData\aboutme.t109.tech //31.31.201.152/var/www/www-root/data/www/ *.* /E
+}
+
 
 #MENU
 function ExecMenuItem([string] $menuItem) {
@@ -280,7 +317,7 @@ function ExecMenuItem([string] $menuItem) {
     #menubegin
     
     elseif ($ex -eq "100101") { Test01 -_transactionId $ex }
-    elseif ($ex -eq "100102") { Test02 -_transactionId $ex}
+    elseif ($ex -eq "100102") { DeployHtmlAboutmeSite -_transactionId $ex}
 
     elseif ($ex -eq "99") { $script:canExit = $true }
     else {

@@ -1,4 +1,0 @@
-[12.07.2023-19:39:12] Script started with params: transactionId=, customWokingFolder=, callType=plain
-[12.07.2023-19:39:18] Executing menu item_100102_in operation script
-[12.07.2023-19:39:18] performing ps command:
-[12.07.2023-19:39:18] Start-process -FilePath 'powershell.exe' -ArgumentList -file C:\Develop\Deploy\Deploy\Operations.ps1 -transactionId 100102 -callType 'external-from-self'  -PassThru

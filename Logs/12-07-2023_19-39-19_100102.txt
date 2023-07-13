@@ -1,3 +1,0 @@
-[12.07.2023-19:39:19] Script started with params: transactionId=100102, customWokingFolder=, callType='external-from-self'
-[12.07.2023-19:39:19] Gonna exec menu item, script:transactionId= 100102
-[12.07.2023-19:39:19] Executing menu item_100102_in operation script
