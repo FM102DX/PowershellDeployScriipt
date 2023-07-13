@@ -28,8 +28,8 @@ $deployCreds1 = New-Object System.Management.Automation.PSCredential ($userName1
 [string] $scriptDir = $PSScriptRoot;
 [string] $scriptFile=$MyInvocation.MyCommand;
 [string] $scriptFileFullPath = [IO.Path]::Combine($scriptDir,$scriptFile);
-
 [string] $pwshPath = "C:\Program Files\PowerShell\7\pwsh.exe";
+[string] $operaExeFullPath = "C:\Users\Admin\AppData\Local\Programs\Opera\opera.exe"
 
 #COMMON -- MENUMAKER
 [string] $menuFileName='MenuDetail.txt';
@@ -250,6 +250,10 @@ function Test01([string] $_transactionId)
     PerformSecondsCountDown -seconds 3;
     $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active api01.service"; }
     if ($isActive -ne 'active')   {   throw;  }
+
+    Start-process -FilePath $operaExeFullPath -ArgumentList "https://storeapi01.t109.tech";
+
+
 }
 
 function DeployHtmlAboutmeSite([string] $_transactionId)
@@ -281,6 +285,7 @@ function DeployHtmlAboutmeSite([string] $_transactionId)
     
     Copy-Item "C:\Develop\SiteData\aboutme.t109.tech" -ToSession $deploySession -Destination "/var/www/www-root/data/www/" -Recurse -Force ;
 
+    Start-process -FilePath $operaExeFullPath -ArgumentList "https://aboutme.t109.tech";
 
     # copy files
     # robocopy "C:\Develop\SiteData\aboutme.t109.tech" "//$($script:deployHost01)/var/www/www-root/data/www/" /mir /xd;

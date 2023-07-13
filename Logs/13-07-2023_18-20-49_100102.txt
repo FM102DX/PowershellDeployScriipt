@@ -1,0 +1,8 @@
+[13.07.2023-18:20:49] fileData=DeployAddress01 root@31.31.201.152:22
+DeployHost01 31.31.201.152
+
+[13.07.2023-18:20:49] arr.Length=3
+[13.07.2023-18:20:49] deployAddress01=root@31.31.201.152:22
+[13.07.2023-18:20:49] Script started with params: transactionId=100102, customWokingFolder=, callType='external-from-self'
+[13.07.2023-18:20:49] Gonna exec menu item, script:transactionId= 100102
+[13.07.2023-18:20:49] Executing menu item_100102_in operation script

@@ -1,0 +1,12 @@
+[13.07.2023-18:19:02] fileData=DeployAddress01 root@31.31.201.152:22
+DeployHost01 31.31.201.152
+
+[13.07.2023-18:19:02] arr.Length=3
+[13.07.2023-18:19:02] deployAddress01=root@31.31.201.152:22
+[13.07.2023-18:19:02] Script started with params: transactionId=, customWokingFolder=, callType=plain
+[13.07.2023-18:19:07] Executing menu item_100102_in operation script
+[13.07.2023-18:19:07] starting new process with args: -file C:\Develop\Deploy\PowershellDeployScriipt\Operations.ps1 -transactionId 100102 -callType 'external-from-self' 
+[13.07.2023-18:19:55] Executing menu item_100102_in operation script
+[13.07.2023-18:19:55] starting new process with args: -file C:\Develop\Deploy\PowershellDeployScriipt\Operations.ps1 -transactionId 100102 -callType 'external-from-self' 
+[13.07.2023-18:20:49] Executing menu item_100102_in operation script
+[13.07.2023-18:20:49] starting new process with args: -file C:\Develop\Deploy\PowershellDeployScriipt\Operations.ps1 -transactionId 100102 -callType 'external-from-self' 
