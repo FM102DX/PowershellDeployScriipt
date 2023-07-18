@@ -1,0 +1,8 @@
+[15.07.2023-12:27:01] fileData=DeployAddress01 root@31.31.201.152:22
+DeployHost01 31.31.201.152
+
+[15.07.2023-12:27:01] arr.Length=3
+[15.07.2023-12:27:01] deployAddress01=root@31.31.201.152:22
+[15.07.2023-12:27:01] Script started with params: transactionId=, customWokingFolder=, callType=plain
+[15.07.2023-12:27:03] Executing menu item_100102_in operation script
+[18.07.2023-14:20:26] Executing menu item_99_in operation script

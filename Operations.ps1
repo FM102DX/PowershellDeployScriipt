@@ -191,7 +191,8 @@ function PerformSecondsCountDown ([int] $seconds, [string]$prefix="Performing co
 }
 
 #CORE CONTENT
-function Test01([string] $_transactionId)
+
+function DeployStore01 ([string] $_transactionId)
 {
     if($callType -eq 'plain')
     {
@@ -200,60 +201,135 @@ function Test01([string] $_transactionId)
         Start-process -FilePath $pwshPath -ArgumentList $argList -PassThru;
         return;
     }
+    
+    [string] $remoteFolder = "/var/www/www-root/data/www/store01.t109.tech";
+    [string] $projectPath =      "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor";
+    [string] $projectBuildPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor\bin\Release\net6.0\*";
+    [string] $wwwRootFolder =  ""; # "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor\wwwroot";
+    [string] $executingFileFullPath = "/var/www/www-root/data/www/store01.t109.tech/T109.ActiveDive.FrontEnd.Blazor.dll";
+    [string] $serviceName = "store01.service";
+    [string] $siteUrl = "https://store01.t109.tech";
 
-    #variables 
+    DeploySiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -siteUrl $siteUrl
+
+}
+
+
+
+function DeployApi01 ([string] $_transactionId)
+{
+    if($callType -eq 'plain')
+    {
+        # this is made to start transaction in a separate window
+        [string] $argList = "-file $scriptFileFullPath -transactionId $_transactionId -callType 'external-from-self' ";
+        Start-process -FilePath $pwshPath -ArgumentList $argList -PassThru;
+        return;
+    }
+    
     [string] $remoteFolder = "/var/www/www-root/data/www/storeapi01.t109.tech";
     [string] $projectPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi";
-    [string] $projectBuildPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi\bin\Debug\net6.0\*";
+    [string] $projectBuildPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi\bin\Release\net6.0\*";
+    [string] $wwwRootFolder =    "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.EventCatalogue.EventCatalogueApi\wwwroot";
+    [string] $executingFileFullPath = "/var/www/www-root/data/www/storeapi01.t109.tech/T109.ActiveDive.EventCatalogue.EventCatalogueApi.dll";
+    [string] $serviceName = "storeapi01.service";
+    [string] $siteUrl = "https://storeapi01.t109.tech";
 
+    DeploySiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -executingFileFullPath $executingFileFullPath -siteUrl $siteUrl
+
+}
+
+function LogAndExit ([string] $text)
+{
+    log $text
+    throw $text
+    exit
+}
+function LogAndOutput ([string] $text)
+{
+    log $text
+    $text
+}
+
+
+
+function DeploySiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, [string] $projectBuildPath,[string] $wwwRootFolder, [string] $serviceName, [string] $executingFileFullPath, [string] $siteUrl)
+{
+
+    LogAndOutput -text  "Deploying site $siteUrl";
+    LogAndOutput -text  "Creating session";
+    
     # session
-    $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";   
+    try {
+        $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";       
+    }
+    catch {
+            log "Unable to crate session: $($_)"
+            exit
+    }
     
+    
+    LogAndOutput -text "Session opened successfully";
+
     # stop service and check if stopped
-    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl stop api01.service" }
-
-    if ($isActive -eq 'active') { throw; }
-
+    Invoke-Command -Session $deploySession -ScriptBlock { Invoke-Expression "sudo systemctl stop  $($args[0])"; } -ArgumentList $serviceName
     PerformSecondsCountDown -seconds 3;
-
-    $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active api01.service"; }
+    $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active  $($args[0])"; } -ArgumentList $serviceName
+    $isActive
+    if ($isActive -ne 'inactive') {LogAndExit -text "Unable to stop service $serviceName on remote host, service status=$isActive" }
     
+    LogAndOutput -text  "Service $serviceName moved to inactive state";
+
     # delete folder
     Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo rm -r -f  $($args[0])";} -ArgumentList $remoteFolder
     
+
     # check if folder deleted
     [string] $folderExists = Invoke-Command -Session $deploySession -ScriptBlock    { test-path $args[0]}  -ArgumentList $remoteFolder
-
-    "folderExists=$folderExists"
-
-    if ($folderExists -ne 'false')   {   throw;  }
-
-    # --- deploy
-    #  -- build 
-
-
-
-    # Start-process -FilePath 'cmd.exe' -ArgumentList "dotnet build $projectPath"
-
-    "dotnet build $projectPath" | cmd
-
-    # create dir and copy it all to host
-    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "mkdir $($args[0])";} -ArgumentList $remoteFolder
+    if ($folderExists -ne 'false')   {   LogAndExit -text "Unable to delete folder"  }
     
-    Copy-Item $projectBuildPath -ToSession $deploySession -Destination "/var/www/www-root/data/www/storeapi01.t109.tech" -Recurse -Force ;
+    LogAndOutput -text  "Remote folder $remoteFolder";
+
+    # --- deploy 
+
+    #  -- build 
+    "dotnet build $projectPath --configuration Release" | cmd
+    log "Build completed";
+
+    #  -- create dir and copy it all to host
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "mkdir $($args[0])";} -ArgumentList $remoteFolder
+    LogAndOutput -text  "Remote dir $remoteFolder created";
+
+    #  -- copy items to remote
+    LogAndOutput -text  "Copying data";
+    Copy-Item $projectBuildPath -ToSession $deploySession -Destination $remoteFolder -Recurse -Force ;
+    
+    if (-not [string]::IsNullOrEmpty($wwwRootFolder))
+    {
+       Copy-Item $wwwRootFolder -ToSession $deploySession -Destination $remoteFolder -Recurse -Force ;
+    }
+    LogAndOutput -text  "Finished data copy";
 
     # give rights to folder
     Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "chmod 777 $($args[0])";} -ArgumentList $remoteFolder
+    LogAndOutput -text  "Given rights to $remoteFolder on remote host";
+
+    # give execution rights to dll
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "chmod +X $($args[0])";} -ArgumentList $executingFileFullPath
+    LogAndOutput -text  "Given execution rights to dll $executingFileFullPath";
+
 
     # start service and check if started
-    Invoke-Command -Session $deploySession -ScriptBlock  {  Invoke-Expression "sudo systemctl start api01.service"; }
-    PerformSecondsCountDown -seconds 3;
-    $isActive = Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo systemctl is-active api01.service"; }
-    if ($isActive -ne 'active')   {   throw;  }
+    LogAndOutput -text  "Starting service $serviceName";
+    Invoke-Command -Session $deploySession -ScriptBlock  {  Invoke-Expression "sudo systemctl start $($args[0])"; } -ArgumentList $serviceName
 
-    Start-process -FilePath $operaExeFullPath -ArgumentList "https://storeapi01.t109.tech";
+    $isActive = Invoke-Command -Session $deploySession -ScriptBlock {  Invoke-Expression "sudo systemctl is-active $($args[0])"; } -ArgumentList $serviceName
+    $isActive
+    if ($isActive -ne 'active')   {   LogAndExit -text "Unable to start service $serviceName on remote host" }
 
+    LogAndOutput -text  "Service started";
+    LogAndOutput -text  "Deploy completed successfully";
 
+    Start-process -FilePath $operaExeFullPath -ArgumentList $siteUrl;
 }
 
 function DeployHtmlAboutmeSite([string] $_transactionId)
@@ -295,6 +371,8 @@ function DeployHtmlAboutmeSite([string] $_transactionId)
     # PerformSecondsCountDown -seconds 10
 }
 
+
+
 function CopyFilesToRemoteHostViaRoboCopy([string] $folderSrc, [string] $hostTarget, [string] $folderTarget )
 {
     [string] $srcPath = $folderSrc.Replace(":", "$");
@@ -321,8 +399,9 @@ function ExecMenuItem([string] $menuItem) {
 
     #menubegin
     
-    elseif ($ex -eq "100101") { Test01 -_transactionId $ex }
-    elseif ($ex -eq "100102") { DeployHtmlAboutmeSite -_transactionId $ex}
+    elseif ($ex -eq "100101") { DeployApi01 -_transactionId $ex }
+    elseif ($ex -eq "100102") { DeployStore01 -_transactionId $ex }
+    elseif ($ex -eq "100110") { DeployHtmlAboutmeSite -_transactionId $ex}
 
     elseif ($ex -eq "99") { $script:canExit = $true }
     else {
