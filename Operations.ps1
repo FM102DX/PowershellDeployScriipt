@@ -204,13 +204,10 @@ function DeployStore01 ([string] $_transactionId)
     
     [string] $remoteFolder = "/var/www/www-root/data/www/store01.t109.tech";
     [string] $projectPath =      "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor";
-    [string] $projectBuildPath = "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor\bin\Release\net6.0\*";
-    [string] $wwwRootFolder =  ""; # "C:\Develop\T109ActivityFrontendFirstSampleVersion\Shop\T109.ActiveDive.FrontEnd.Blazor\wwwroot";
-    [string] $executingFileFullPath = "/var/www/www-root/data/www/store01.t109.tech/T109.ActiveDive.FrontEnd.Blazor.dll";
-    [string] $serviceName = "store01.service";
+    [string] $projectBuildPath = "C:\Develop\Deploy\BalzorDeployFolder";
     [string] $siteUrl = "https://store01.t109.tech";
 
-    DeploySiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -siteUrl $siteUrl
+    DeployBalzorWasm60SiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -siteUrl $siteUrl
 
 }
 
@@ -234,7 +231,7 @@ function DeployApi01 ([string] $_transactionId)
     [string] $serviceName = "storeapi01.service";
     [string] $siteUrl = "https://storeapi01.t109.tech";
 
-    DeploySiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -executingFileFullPath $executingFileFullPath -siteUrl $siteUrl
+    DeployAspNetCore60ApiSiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -executingFileFullPath $executingFileFullPath -siteUrl $siteUrl
 
 }
 
@@ -250,19 +247,25 @@ function LogAndOutput ([string] $text)
     $text
 }
 
+function DeleteAllFilesFromFolder ([string] $folderName)
+{
+    Get-ChildItem -Path  $folderName -recurse | Select-Object -ExpandProperty FullName |   Remove-Item -recurse -force 
+}
 
 
-function DeploySiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, [string] $projectBuildPath,[string] $wwwRootFolder, [string] $serviceName, [string] $executingFileFullPath, [string] $siteUrl)
+function DeployAspNetCore60ApiSiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, [string] $projectBuildPath,[string] $wwwRootFolder, [string] $serviceName, [string] $executingFileFullPath, [string] $siteUrl)
 {
 
     LogAndOutput -text  "Deploying site $siteUrl";
     LogAndOutput -text  "Creating session";
     
     # session
-    try {
+    try 
+    {
         $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";       
     }
-    catch {
+    catch 
+    {
             log "Unable to crate session: $($_)"
             exit
     }
@@ -314,9 +317,8 @@ function DeploySiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, 
     LogAndOutput -text  "Given rights to $remoteFolder on remote host";
 
     # give execution rights to dll
-    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "chmod +X $($args[0])";} -ArgumentList $executingFileFullPath
+    Invoke-Command -Session $deploySession -ScriptBlock  {  Invoke-Expression "chmod +X $($args[0])";} -ArgumentList $executingFileFullPath
     LogAndOutput -text  "Given execution rights to dll $executingFileFullPath";
-
 
     # start service and check if started
     LogAndOutput -text  "Starting service $serviceName";
@@ -324,13 +326,65 @@ function DeploySiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, 
 
     $isActive = Invoke-Command -Session $deploySession -ScriptBlock {  Invoke-Expression "sudo systemctl is-active $($args[0])"; } -ArgumentList $serviceName
     $isActive
-    if ($isActive -ne 'active')   {   LogAndExit -text "Unable to start service $serviceName on remote host" }
+    if ($isActive -ne 'active') { LogAndExit -text "Unable to start service $serviceName on remote host" }
 
     LogAndOutput -text  "Service started";
     LogAndOutput -text  "Deploy completed successfully";
 
     Start-process -FilePath $operaExeFullPath -ArgumentList $siteUrl;
 }
+
+
+function DeployBalzorWasm60SiteToUbuntuHost ([string] $remoteFolder, [string] $projectPath, [string] $projectBuildPath, [string] $projectBuildZipPath, [string] $siteUrl)
+{
+    LogAndOutput -text  "Deploying Blazor on Net Core 6.0 site $siteUrl ";
+    LogAndOutput -text  "Creating session";
+    
+    # session
+    try {
+        $deploySession = New-PSSession -HostName $script:deployAddress01 -KeyFilePath "C:\Users\Admin\.ssh\id_rsa";       
+    }
+    catch {
+            log "Unable to crate session: $($_)"
+            exit
+    }
+    
+    LogAndOutput -text "Session opened successfully";
+
+    # delete folder
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "sudo rm -r -f  $($args[0])";} -ArgumentList $remoteFolder
+
+    # check if folder deleted
+    [string] $folderExists = Invoke-Command -Session $deploySession -ScriptBlock    { test-path $args[0]}  -ArgumentList $remoteFolder
+    if ($folderExists -ne 'false')   {   LogAndExit -text "Unable to delete folder"  }
+
+    LogAndOutput -text  "Remote folder deleted $remoteFolder";
+
+    # ---- deploy 
+
+    #  -- build 
+    DeleteAllFilesFromFolder -folderName $projectBuildPath
+    "dotnet publish $projectPath -c Release -o $projectBuildPath --force "  | cmd
+    
+    log "Publish completed, now gonna copy";
+
+    #  -- create dir and copy it all to host
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "mkdir $($args[0])";} -ArgumentList $remoteFolder
+    LogAndOutput -text  "Remote dir $remoteFolder created";
+
+    #copy files
+    Copy-Item "$($projectBuildPath)\*" -ToSession $deploySession -Destination $remoteFolder -Recurse -Force ;
+
+    # give rights to folder
+    Invoke-Command -Session $deploySession -ScriptBlock    {  Invoke-Expression "chmod 777 $($args[0])";} -ArgumentList $remoteFolder
+    LogAndOutput -text  "Given rights to $remoteFolder on remote host";
+
+    LogAndOutput -text  "Finished data copy";
+
+    LogAndOutput -text  "Deploy completed successfully";
+    Start-process -FilePath $operaExeFullPath -ArgumentList $siteUrl;
+}
+
 
 function DeployHtmlAboutmeSite([string] $_transactionId)
 {
@@ -366,15 +420,13 @@ function DeployHtmlAboutmeSite([string] $_transactionId)
     # copy files
     # robocopy "C:\Develop\SiteData\aboutme.t109.tech" "//$($script:deployHost01)/var/www/www-root/data/www/" /mir /xd;
 
-    
     # CopyFilesToRemoteHostViaRoboCopy -folderSrc "C:\Develop\SiteData\aboutme.t109.tech" -hostTarget "$($script:deployHost01)" -folderTarget "/var/www/www-root/data/www/";
     # PerformSecondsCountDown -seconds 10
 }
 
-
-
 function CopyFilesToRemoteHostViaRoboCopy([string] $folderSrc, [string] $hostTarget, [string] $folderTarget )
 {
+    # this doesnt work
     [string] $srcPath = $folderSrc.Replace(":", "$");
     [string] $targetPath = "\\$($hostTarget)\$($folderTarget)".Replace(":", "$");
     
